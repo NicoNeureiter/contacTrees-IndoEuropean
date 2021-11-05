@@ -6,6 +6,7 @@
 <beast beautitemplate="Standard" beautistatus=""  version="2.0"
        namespace="beast.core:beast.evolution.alignment
                  :beast.evolution.tree.coalescent
+                 :beast.evolution.tree
                  :beast.core.util:beast.evolution.nuc
                  :beast.evolution.operators
                  :beast.evolution.sitemodel
@@ -46,34 +47,47 @@
 {alignments}</data>
 
 <!-- Filtered alignments -->
-<userDataType id="dtype" spec="beast.evolution.datatype.TwoStateCovarion" />
+{data_type}
 {filtered_alignments}
-
-<!-- Clocks per concept -->
-{concept_clocks}
 
 <!-- ################################   NON-STATE PARAMETERS   ################################# -->
 
-<!-- <branchRateModel id="clock" spec="StrictClockModel" clock.rate="@clockRate" /> -->
+<!-- STRICT CLOCK
+<branchRateModel id="clock" spec="StrictClockModel" clock.rate="@clockRate" />
+-->
+<!--RELAXED CLOCK
 <branchRateModel id="clock.slow" spec="UCRelaxedClockModel" rateCategories="@clockRateCategories" tree="@acg" clock.rate="@clockRate.slow" >
   <LogNormal id="LogNormal:clock.slow" S="@clockStdev" meanInRealSpace="true" name="distr" M="1.0" />
+</branchRateModel>
+<branchRateModel id="clock.medium" spec="UCRelaxedClockModel" rateCategories="@clockRateCategories" tree="@acg" clock.rate="@clockRate.medium" >
+  <LogNormal id="LogNormal:clock.medium" S="@clockStdev" meanInRealSpace="true" name="distr" M="1.0" />
 </branchRateModel>
 <branchRateModel id="clock.fast" spec="UCRelaxedClockModel" rateCategories="@clockRateCategories" tree="@acg" clock.rate="@clockRate.fast" >
   <LogNormal id="LogNormal:clock.fast" S="@clockStdev" meanInRealSpace="true" name="distr" M="1.0" />
 </branchRateModel>
+-->
+<!--RELAXED CLOCK with frozen branches -->
+<branchRateModel id="clock.slow" spec="FreezableClock">
+  <clock id="inner.clock.slow" spec="UCRelaxedClockModel" rateCategories="@clockRateCategories" tree="@acg" clock.rate="@clockRate.slow" >
+    <LogNormal id="LogNormal:clock.slow" S="@clockStdev" meanInRealSpace="true" name="distr" M="1.0" />
+  </clock>
+  {frozen_taxa}
+</branchRateModel>
+<branchRateModel id="clock.medium" spec="FreezableClock">
+  <clock id="inner.clock.medium" spec="UCRelaxedClockModel" rateCategories="@clockRateCategories" tree="@acg" clock.rate="@clockRate.medium" >
+    <LogNormal id="LogNormal:clock.medium" S="@clockStdev" meanInRealSpace="true" name="distr" M="1.0" />
+  </clock>
+  {frozen_taxa}
+</branchRateModel>
+<branchRateModel id="clock.fast" spec="FreezableClock">
+  <clock id="inner.clock.fast" spec="UCRelaxedClockModel" rateCategories="@clockRateCategories" tree="@acg" clock.rate="@clockRate.fast" >
+    <LogNormal id="LogNormal:clock.fast" S="@clockStdev" meanInRealSpace="true" name="distr" M="1.0" />
+  </clock>
+  {frozen_taxa}
+</branchRateModel>
 
-
-<substModel id="covarionModel" spec="BinaryCovarion" alpha="@covarionAlpha" switchRate="@covarionSwitchRate" vfrequencies="@freqParameter">
-<parameter id="hiddenfrequencies" dimension="2" lower="0.0" name="hfrequencies" upper="1.0">0.5 0.5</parameter>
-<frequencies id="dummyfrequencies" spec="Frequencies" frequencies="0.5 0.5" />
-</substModel>
-<!--substModel id="binaryCTMC" spec="GeneralSubstitutionModel">
-<parameter dimension="2" estimate="false" id="rates.binaryCTMC" name="rates">1.0 1.0</parameter>
-<frequencies id="estimatedFreqs.s:simulated" spec="Frequencies" frequencies="0.5 0.5"/>
-</substModel-->
-
-<siteModel id="SiteModel.vocabulary" spec="SiteModel" substModel="@covarionModel" />
-<!--siteModel id="SiteModel.vocabulary" spec="SiteModel" gammaCategoryCount="2" shape="@gammaShape:siteModel" substModel="@covarionModel" /-->
+{subst_model}
+<siteModel id="SiteModel.vocabulary" spec="SiteModel" substModel="@substModel" />
 
 <!-- BLOCK-SET -->
 <stateNode spec="BlockSet" id="allBlocks" network="@acg">
@@ -83,8 +97,7 @@
 </stateNode>
 
 
-<!--<run id="mcmc" spec="CoupledMCMC" chainLength="25000000" chains="4" deltaTemperature="0.03" target="0.15" optimise="true" resampleEvery="200" heatLikelihoodOnly="true" logHeatedChains="true">-->
-<run id="mcmc" spec="MCMC" chainLength="20000000">
+{run_tag}
 
   <state id="state" storeEvery="5000">
 
@@ -99,20 +112,15 @@
     </stateNode>
 
     <!-- Tree prior (birth-death) -->
-    <!--stateNode id="lossRate" spec="RealParameter">0.001</stateNode-->
     <stateNode id="birthRate" spec="RealParameter">0.0005</stateNode>
-    <stateNode id="deathRate" spec="RealParameter">0.2</stateNode>
+    <stateNode id="deathRate" spec="RealParameter">0.3</stateNode>
     <stateNode id="samplingProportion" spec="RealParameter">0.02 0.5</stateNode>
-    <stateNode id="removalProbability" spec="RealParameter"> 0.5 </stateNode> <!--
-    This assumes no language is removed just from being sampled. Actually, we *could* assume
-    that fieldwork some 50 years ago removes a language from the ones that are
-    interesting to do fieldwork on right now, so there could be an effect that
-    would be within the scope of the BDSKY. -->
 
     <!-- Clock model (relaxed log-normal) -->
     <stateNode id="clockRate.slow" upper="10.0" spec="RealParameter">0.00002</stateNode>
+    <stateNode id="clockRate.medium" upper="10.0" spec="RealParameter">0.00005</stateNode>
     <stateNode id="clockRate.fast" upper="10.0" spec="RealParameter">0.00008</stateNode>
-    <stateNode id="clockStdev" estimate="true" spec="RealParameter" lower="0.0" upper="1.0">0.8</stateNode>
+    <stateNode id="clockStdev" estimate="true" spec="RealParameter" lower="0.0" upper="1.0">0.5</stateNode>
     <stateNode id="clockRateCategories" spec="parameter.IntegerParameter" dimension="40">1</stateNode>
 
     <!-- Substitution model (covarion) -->
@@ -138,9 +146,8 @@
     <distribution id="prior" spec="util.CompoundDistribution">
 
       <!-- ACG prior -->
-      <distribution id="ACGBirthDeathModel" spec="contactrees.model.ACGDistribution" network="@acg" conversionRate="@conversionRate" linearContactGrowth="true">
+      <distribution id="ACGBirthDeathModel" spec="contactrees.model.ACGDistribution" network="@acg" conversionRate="@conversionRate" linearContactGrowth="true" upperConvCountBound="50">
         <cfModel id="birthDeathModel" spec="beast.evolution.speciation.BirthDeathSkylineModel" tree="@acg" rho="0.5" conditionOnRoot="true" conditionOnSurvival="false">
-          <removalProbability idref="removalProbability" />
           <netDiversification idref="birthRate" />
           <turnOver idref="deathRate" />
           <samplingProportion idref="samplingProportion" />
@@ -148,49 +155,39 @@
           <reverseTimeArrays id="BDSKY.reverseTimeArrays" spec="parameter.BooleanParameter" dimension="5">true true true true true</reverseTimeArrays>
         </cfModel>
       </distribution>
+
       <distribution id="ConvMovePrior" spec="ConversionMovePrior" network="@acg" blockSet="@allBlocks" pMove="@pMove"/>
 
+      <prior id="prior:expectedConversions" name="distribution" x="@expectedConversions">
+        <distr id="prior:expectedConversions:distr" spec="Exponential" mean="0.1" />
+      </prior>
+
+      <prior id="prior:pMove" name="distribution" x="@pMove">
+        <distr id="prior:pMove:distr" spec="Beta" alpha="2" beta="16" />
+      </prior>
+
       <prior id="BirthRatePrior" name="distribution" x="@birthRate">
-        <LogNormal id="LogNormal.BirthRate" name="distr">
-          <M id="prior:birthRate:M" spec="RealParameter" estimate="false">-7.316</M> <!-- Estimate based on 100 languages over 10000 years -->
-          <S id="prior:birthRate:S" spec="RealParameter" estimate="false">2.302585092994046</S> <!-- One order of magnitude standard deviation -->
-        </LogNormal>
+        <distr spec="LogNormalDistributionModel" meanInRealSpace="true" M="0.00046" S="2.3026"/>
+        <!-- M: Estimate based on 100 languages over 10000 years:     -->
+        <!--         e^(M*10000) = 100                                -->
+        <!--     =>  M = ln(100)/10000 = 0.00046                      -->
+        <!-- S: One order of magnitude standard deviation             -->
       </prior>
 
       <prior id="prior:deathRate" name="distribution" x="@deathRate">
-        <distr id="prior:deathRate:distr" spec="Beta" alpha="1" beta="1" /> <!-- We do not know much, but we do know some lanugages are extinct and in the expanding lanugage families we look at it seems like the majority are not. And we vaguely see death rates around 0.2~0.5 inferred in other language phylogenies. -->
+        <distr spec="beast.math.distributions.Uniform" lower="0.0" upper="1.0" />
       </prior>
-
-      <!--prior id="samplingRatePrior" name="distribution" x="@samplingProportion">
-        <distr id="Beta.samplingRatePrior" spec="Beta" alpha="30" beta="2" />
-      </prior-->
-
 
       <!-- Clock model (relaxed log-normal) -->
-
-      <prior id="prior:clockRate.slow" name="distribution" x="@clockRate.slow">
-        <distr id="prior:clockRate.slow:distr" spec="LogNormalDistributionModel" offset="0.0" M="-10.5" S="2.3" />
-      </prior>
-      <prior id="prior:clockRate.fast" name="distribution" x="@clockRate.fast">
-        <distr id="prior:clockRate.fast:distr" spec="LogNormalDistributionModel" offset="0.0" M="-9.5" S="2.3" />
-      </prior>
+{clock_rate_prior}
 
       <prior id="prior:clockStdev" name="distribution" x="@clockStdev">
-        <distr id="prior:clockStdev:distr" spec="Exponential" mean="0.1" />
+        <distr id="prior:clockStdev:distr" spec="Exponential" mean="{clock_stdev_prior}" />
       </prior>
 
 
       <!-- Substitution model (covarion) -->
-
-      <prior id="prior:covarionAlpha" name="distribution" x="@covarionAlpha">
-        <distr id="prior:covarionAlpha:distr" spec="beast.math.distributions.Uniform" lower="0" upper="1" />
-      </prior>
-
-      <prior id="prior:covarionSwitchRate" name="distribution" x="@covarionSwitchRate">
-        <distr id="prior:covarionSwitchRate:distr" spec="Beta" alpha="1" beta="5" />
-      </prior>
-
-
+{subst_model_prior}
 
       <!-- Topology priors -->
 {mrca_priors}
@@ -208,21 +205,22 @@
 {operators}
 
   <!-- Tree prior (birth-death) -->
-  <operator id="BirthRateScaler" spec="ScaleOperator" parameter="@birthRate" scaleFactor="0.45" weight="2.0" />
-  <operator id="DeathRateScaler" spec="ScaleOperator" parameter="@deathRate" scaleFactor="0.45" weight="1.5" />
+  <operator id="BirthRateScaler" spec="ScaleOperator" parameter="@birthRate" scaleFactor="0.43" weight="2.0" />
+  <operator id="DeathRateScaler" spec="ScaleOperator" parameter="@deathRate" scaleFactor="0.35" weight="1.5" />
   <!--operator id="SamplingScaler" spec="ScaleOperator" parameter="@samplingRate" scaleFactor="0.8" weight="0.5" /-->
 
   <!-- Clock model (relaxed log-normal) -->
-  <operator id="ClockRateScaler.slow" spec="ScaleOperator" parameter="@clockRate.slow" scaleFactor="0.75" weight="5.5" />
-  <operator id="ClockRateScaler.fast" spec="ScaleOperator" parameter="@clockRate.fast" scaleFactor="0.75" weight="5.5" />
-  <operator id="ClockStdevScaler" spec="ScaleOperator" parameter="@clockStdev" scaleFactor="0.7" weight="3.5"/>
+  <operator id="ClockRateScaler.slow" spec="ScaleOperator" parameter="@clockRate.slow" scaleFactor="0.7" weight="3.0" />
+  <operator id="ClockRateScaler.medium" spec="ScaleOperator" parameter="@clockRate.medium" scaleFactor="0.7" weight="3.0" />
+  <operator id="ClockRateScaler.fast" spec="ScaleOperator" parameter="@clockRate.fast" scaleFactor="0.7" weight="3.0" />
   <operator id="CatRandomWalk" spec="IntRandomWalkOperator" parameter="@clockRateCategories" weight="5.0" windowSize="10"/>
   <operator id="CatSwap" spec="SwapOperator" intparameter="@clockRateCategories" weight="5.0"/>
   <operator id="CatUniform" spec="UniformOperator" parameter="@clockRateCategories" weight="5.0"/>
+{clock_stdev_operator}
 
   <!-- Substitution model (covarion) -->
   <operator id="freqParameterSampler" spec="DeltaExchangeOperator" parameter="@freqParameter" delta="0.015" weight="0.6" />
-  <operator id="covarionAlphaScaler" spec="ScaleOperator" parameter="@covarionAlpha" scaleFactor="0.4" weight="0.8" />
+  <operator id="covarionAlphaScaler" spec="ScaleOperator" parameter="@covarionAlpha" scaleFactor="0.3" weight="0.8" />
   <operator id="covarionSwitchRateScaler" spec="ScaleOperator" parameter="@covarionSwitchRate" scaleFactor="0.6" weight="0.8" />
 
   <!-- #######################################    LOGGERS    ####################################### -->
@@ -236,6 +234,7 @@
     <log idref="conversionRate"/>
     <log idref="pMove"/>
     <log idref="clockRate.slow"/>
+    <log idref="clockRate.medium"/>
     <log idref="clockRate.fast"/>
     <log idref="clockStdev"/>
     <!--log idref="gammaShape:siteModel"/-->
@@ -252,6 +251,7 @@
     <log idref="conversionRate"/>
     <log idref="pMove"/>
     <log idref="clockRate.slow"/>
+    <log idref="clockRate.medium"/>
     <log idref="clockRate.fast"/>
     <log idref="clockStdev"/>
     <!--log idref="gammaShape:siteModel"/-->
@@ -264,6 +264,9 @@
   </logger>
   <logger spec="Logger" fileName="$(filebase).trees" logEvery="10000" mode="tree">
     <log spec="ACGWithMetaDataLogger" network="@acg" blockSet="@allBlocks"/>
+  </logger>
+  <logger spec="Logger" fileName="$(filebase).withRates.trees" logEvery="10000" mode="tree">
+    <log spec="TreeWithMetaDataLogger" tree="@acg" branchratemodel="@clock.medium"/>
   </logger>
 {word_tree_loggers}
 </run>

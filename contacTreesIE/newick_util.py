@@ -1,5 +1,5 @@
 from operator import attrgetter
-from typing import Union, Set, List, Optional
+from typing import Union, Set, List, Dict, Optional
 
 from newick import Node
 
@@ -14,7 +14,10 @@ class ContactEdge(object):
         receiver_clade (str): String representation of the clade where the edge ends
                               (the receiver language of the loan words).
         height (float): The height (units of time before present) of the contact event
-
+        affected_blocks (list): ...
+        block_posterior (dict): ...
+        donor_node (Node): ...
+        receiver_node (Node): ...
 
     """
 
@@ -22,11 +25,16 @@ class ContactEdge(object):
                  donor_clade: str = None,
                  receiver_clade: str = None,
                  height: float = None,
-                 affected_blocks: Set[Node] = None):
+                 affected_blocks: List[str] = None,
+                 block_posterior: Dict[str, float] = None):
         self.donor_clade = donor_clade
         self.receiver_clade = receiver_clade
         self.height = height
         self.affected_blocks = affected_blocks
+        self.block_posterior = block_posterior
+
+        self.donor_node = None
+        self.receiver_node = None
 
     def __repr__(self):
         return f'ContactEdge({self.donor_clade}->{self.receiver_clade}:{self.height})'
@@ -77,6 +85,25 @@ def get_age(node: Union[ContactEdge, Node]) -> float:
         return get_age(node.ancestor) - node.length
 
 
+def get_node_by_name(tree: Node, name: str, ignore_duplicates: bool = False) -> Node:
+    matches = get_all_nodes_named(tree, name)
+
+    assert len(matches) >= 1, f'No node named `{name}` found in tree.'
+
+    if not ignore_duplicates:
+        assert len(matches) == 1, f'Multiple nodes named `{name}` found in tree.'
+
+    return matches[0]
+
+
+def get_all_nodes_named(tree: Node, name: str):
+    matches = []
+    for node in tree.walk():
+        if node.name == name:
+            matches.append(node)
+
+    return matches
+
 def parse_node_comment(comment: str) -> dict:
     # Drop the leading `&`
     assert comment.startswith('&')
@@ -88,10 +115,13 @@ def parse_node_comment(comment: str) -> dict:
     # Manually parse the `affectedBlocks` string
     attrs['affectedBlocks'] = set(attrs['affectedBlocks'][1:-1].split(','))
 
-    block_post_reformated = attrs['blockPosterior'].replace(':', '\':')\
-                                                   .replace(',', ',\'')\
-                                                   .replace('{', '{\'')
-    attrs['blockPosterior'] = eval(block_post_reformated)
+    if 'blockPosterior' in attrs:
+        block_post_reformated = attrs['blockPosterior'].replace(':', '\':')\
+                                                       .replace(',', ',\'')\
+                                                       .replace('{', '{\'')
+        attrs['blockPosterior'] = eval(block_post_reformated)
+    else:
+        attrs['blockPosterior'] = {b: 1. for b in attrs['affectedBlocks']}
 
     return attrs
 
@@ -109,11 +139,15 @@ def collect_contactedges(tree: Node, block_posterior_threshold: float = 0.5) -> 
         clade = get_actual_leaves(node)
         return ''.join([str(int(l in clade)) for l in leaves])
 
+    done = set()
+
     for node in tree.walk():
         if node.name is None:
             assert not node.is_leaf
+            continue
 
-        if node.name and node.name.startswith('#'):
+        # if node.name and node.name.startswith('#'):
+        if node.name.startswith('#'):
             if node.name not in contactedges:
                 contactedges[node.name] = ContactEdge()
             cedge = contactedges[node.name]
@@ -133,6 +167,15 @@ def collect_contactedges(tree: Node, block_posterior_threshold: float = 0.5) -> 
                     b for b in node_attrs['affectedBlocks']
                     if node_attrs['blockPosterior'][b] > block_posterior_threshold
                 ]
+                cedge.block_posterior = {b: node_attrs['blockPosterior'][b] for b in node_attrs['affectedBlocks']}
+
+            cedge_hash = (cedge.donor_clade, cedge.receiver_clade)
+            if None not in cedge_hash:
+                # Check whether this is contact edge was already added
+                if cedge_hash in done:
+                    contactedges.pop(node.name)
+                else:
+                    done.add(cedge_hash)
 
 
     return list(contactedges.values())

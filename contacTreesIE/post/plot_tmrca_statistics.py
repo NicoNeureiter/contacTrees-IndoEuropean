@@ -5,6 +5,8 @@ import seaborn as sb
 from newick import Node
 from nexus import NexusReader
 
+from contacTreesIE.plotting import color_tree, plot_tree_topology
+
 
 # class Node(newick.Node):
 #
@@ -33,7 +35,7 @@ def mrca(n1: Node, n2: Node, depths: dict):
     else:
         return mrca(n1, n2.ancestor, depths)
 
-from contacTreesIE.plotting import color_tree, plot_tree_topology
+
 def plot_tmrca_statistics(trees_path: Path, label=None, axes=None):
     if axes is None:
         _, axes = plt.subplots(2)

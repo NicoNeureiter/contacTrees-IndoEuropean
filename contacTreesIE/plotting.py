@@ -8,7 +8,7 @@ from matplotlib import pyplot as plt
 from matplotlib.collections import LineCollection
 from newick import Node
 
-from contacTreesIE.newick_util import get_age
+from contacTreesIE.newick_util import get_age, get_root, get_height
 
 PI = np.pi
 TAU = 2 * np.pi
@@ -88,17 +88,19 @@ def plot_tree_topology(
         node: Node,
         node_plotter: Callable = None,
         annotate_leafs: bool = False,
+        annotate_internal_nodes: bool = False,
         ax: plt.Axes = None,
         **plot_kwargs
 ):
     """
 
     Args:
-        node (Node):
-        node_plotter:
-        annotate_leafs (bool): Whether or not to show tip node-labels
-        ax:
-        **plot_kwargs:
+        node (Node): The root node of the tree to be plotted
+        node_plotter (function): A function handler defining how a node is plotted.
+        annotate_leafs (bool): Whether or not to show tip node labels
+        annotate_internal_nodes (bool): Whether or not to show internal node labels
+        ax: The Matplotlib axis used for plotting the tree topology.
+        **plot_kwargs: Plotting parameters.
 
     Returns:
         float: the x coordinate of tree in the plot.
@@ -124,11 +126,15 @@ def plot_tree_topology(
                 **plot_kwargs
             )
 
+    label_offset = 0.01 * get_height(get_root(node))
     if annotate_leafs and node.is_leaf:
-        plt.text(node.x, node.y - 0.015, node.name,
+        plt.text(node.x, node.y - label_offset, node.name,
                  horizontalalignment='center', verticalalignment='top',
                  fontsize=10, rotation=90)
-
+    if annotate_internal_nodes and not node.is_leaf:
+        plt.text(node.x, node.y - label_offset, node.name,
+                 horizontalalignment='center', verticalalignment='top',
+                 fontsize=9)
 
 def plot_network_topology(network, **plot_tree_args):
     tree = network.tree

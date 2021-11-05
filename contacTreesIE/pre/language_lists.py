@@ -1,4 +1,9 @@
 
+TINY_SET = [
+    'Cornish', 'Danish', 'Norwegian', 'English', 'French', 'German', 'Dutch_List', 'Gothic',
+    'Irish_B', 'Italian', 'Latin', 'Old_English', 'Old_High_German', 'Old_Irish',
+    'Old_Norse', 'Scots_Gaelic', 'Spanish', 'Portuguese_ST', 'Rumanian_List', 'Romansh', 'Welsh_N']
+
 
 CELTIC = [
     'Old_Irish', 'Irish_A', 'Scots_Gaelic', 'Welsh_N', 'Welsh_C', 'Breton_List', 'Breton_Se',
@@ -66,7 +71,7 @@ CHANG_MEDIUM = [
 
 CHANG_BROAD = []
 
-
+CHANG_MEDIUM_UO = CHANG_MEDIUM + ['Umbrian', 'Oscan']
 
 
 # RENAMING DICTS (necessary to translate between different naming conventions)
