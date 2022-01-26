@@ -324,7 +324,7 @@ def parse_loanwords(ielex: pd.DataFrame):
         concepts_grouped.set_index('language')
         for i_cc, (_, cc_grouped) in enumerate(concepts_grouped.groupby('cc_id')):
             for _, row in cc_grouped.iterrows():
-                if row.status in ('LOAN',):  #, 'LOAN,EXCLUDE'):
+                if row.status in ('LOAN',):
                     loans.loc[concept, row.language] = 1
     return loans
 
@@ -446,8 +446,6 @@ def compile_ielex_xml(data_raw: dict, ascertainment_correction=True, min_coverag
             )
         )
 
-
-
     language_alignments = defaultdict(str)
     concept_ranges = {}
     concept_n_sites = {}
@@ -462,11 +460,6 @@ def compile_ielex_xml(data_raw: dict, ascertainment_correction=True, min_coverag
             if not is_nan:
                 coverage[lang] += 1
                 words_per_language[lang] += sum(map(int, data_l_c))
-            elif lang == 'English':
-                print(concept)
-
-            # if is_nan and lang == 'Afrikaans':
-            #     print(concept)
 
             if ascertainment_correction:
                 if is_nan:
@@ -483,22 +476,10 @@ def compile_ielex_xml(data_raw: dict, ascertainment_correction=True, min_coverag
                 i = i_next
                 n_concepts += 1
 
-    for c, lang in sorted([(c, l) for l, c in coverage.items()]):
-        print(lang.ljust(15, ' '), str(c).ljust(5, ' '), words_per_language[lang], ' ', words_per_language[lang]-c)
-    # exit()
-
-    # site_counts = [*concept_n_sites.values()]
-    # plt.bar(*np.unique(site_counts, return_counts=True))
-    # plt.show()
-    # exit()
-
     # Filter languages with insufficient data
     for lang in list(language_alignments.keys()):
         if lang not in INCLUDED_LANGUAGES:
-            # print(lang.ljust(20) + '%.1f%%' % (100 * coverage[lang] / n_concepts))
             language_alignments.pop(lang)
-        # else:
-        #     print(' '*30 + lang.ljust(20) + '%.1f%%' % (100 * coverage[lang] / n_concepts))
 
     # Fill in alignments for each language
     alignments = ''
@@ -527,11 +508,9 @@ def compile_ielex_xml(data_raw: dict, ascertainment_correction=True, min_coverag
     mrca_priors = ''.join(clade.to_xml() for clade in clades)
 
     # Compile likelihoods
-    # with slow or fast clock depending on the number of sites per concept
+    # with slow, medium or fast clock depending on the number of sites per concept
     likelihoods = ''
     for concept, n_sites in concept_n_sites.items():
-        # TODO: maybe reconsider the bins
-        # With 3 bins I would do slow 1...5, medium 6...9, fast 10...\inf
         if n_sites <= 5:
             site_category = 'slow'
         elif n_sites <= 9:
@@ -704,40 +683,14 @@ def filter_languages(df):
 
 
 if __name__ == '__main__':
-    # DATA_PATH = Path('resources/ielex-130421-ag-cc.tsv')
     DATA_PATH = Path('resources/data-mittellatein-2021-09-30.csv')
     ielex_df = read_dataset(DATA_PATH)
     ielex_df = drop_noncoded(ielex_df)
-    print(ielex_df.columns.to_numpy())
-    print(ielex_df.language.unique())
-    # for lang in ielex_df.language.unique():
-    #     # if lang in [*CELTIC, *GERMANIC, *ROMANCE]:
-    #     if lang.lower().startswith('irish'):
-    #         print(str.ljust(lang, 20), ielex_df.concept[ielex_df.language == lang].to_numpy())
 
-    # A = ielex_df[ielex_df.language == 'English']
-    # B = ielex_df[ielex_df.language == 'German']
-    # print(np.mean([a in B.cc_id.to_list() for a in A.cc_id.to_list()]))
-    # # print([a in B for a in A])
-    # for i, a in A.iterrows():
-    #     if a['cc_id'] in B.cc_id.to_list(): continue
-    #     concept = a['concept']
-    #     a_lexeme = a['lexeme']
-    #     b_lexemes = B[B.concept == concept].lexeme.to_list()
-    #     print(concept.ljust(15), a_lexeme.ljust(15), b_lexemes)
-    #
-    # exit()
     path_base, _, path_ext = str(DATA_PATH).rpartition('.')
     subset_path = path_base + '-subset.tsv'
     ielex_df = filter_languages(ielex_df)
     ielex_df.to_csv(subset_path, sep='\t', index=False)
-
-    # for l in INCLUDED_LANGUAGES:
-    #     if l not in TIP_DATES:
-    #         print(l)
-    #
-    # print(len(INCLUDED_LANGUAGES))
-    # exit()
 
     N_RUNS = 5
 
