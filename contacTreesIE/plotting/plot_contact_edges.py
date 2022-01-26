@@ -749,5 +749,3 @@ if __name__ == '__main__':
     # plt.axis('off')
     # plt.tight_layout(pad=0.01)
     # plt.savefig('wordlist.pdf')
-
-    # plot_wordtrees(summary_nexus, word_trees_directory=Path('./wordtrees_tmp/'))
