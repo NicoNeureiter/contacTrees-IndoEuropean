@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import colorsys
-from typing import Callable
+from typing import Callable, Optional
 
 import numpy as np
 from matplotlib import pyplot as plt
@@ -10,8 +10,15 @@ from newick import Node
 
 from contacTreesIE.newick_util import get_age, get_root, get_height
 
-PI = np.pi
-TAU = 2 * np.pi
+# Custom colors
+GRAY_0 = (0.95, 0.95, 0.95)
+GRAY_1 = (0.85, 0.85, 0.85)
+GRAY_75 = (0.75, 0.75, 0.75)
+GRAY_2 = (0.65, 0.65, 0.65)
+GRAY_3 = (0.5, 0.5, 0.5)
+CEDGE_COLOR = (0.85, 0.65, 0)
+DONOR_COLOR = (0., 0.6, 0.55)
+RECEIVER_COLOR = (0.8, 0.3, 0)
 
 
 def get_location(node):
@@ -48,48 +55,68 @@ def n_leafs(tree: Node, n=0):
 def assign_node_coordinates(
         node: Node,
         left: float = 0,
-        children_sort_key: Callable = None,
+        children_sort_key: Optional[Callable] = None,
+        flip_order_at_nodes = (),
+        clade_label_getter: Optional[Callable] = None
 ):
     """
 
     Args:
-        node (Node):
-        left:
-        children_sort_key:
-        y_parent (float): the vertical coordinate of the parent node.
-
+        node: The root node of the tree for which the node coordinates are assigned.
+        left: The x-coordinate of the left-most node.
+        children_sort_key: The key-function for sorting the tree topology (which clade goes left or right at a split).
+        flip_order_at_nodes: Names of the nodes where the order defined by children_sort_key should be reversed.
     """
     if children_sort_key is None:
         children_sort_key = lambda c: len(c.get_leaves())
+    if clade_label_getter is None:
+        clade_label_getter = lambda _: None
 
     node.y = get_age(node)
 
     if node.is_leaf:
         node.x = left
+        return left
 
     else:
-        children_sorted = sorted(node.descendants, key=children_sort_key)
-        # children_sorted = node.descendants
+        children_sorted = (sorted(node.descendants, key=children_sort_key))
+        if node.name in flip_order_at_nodes:
+            children_sorted = children_sorted[::-1]
 
         x_children = []
+
+        previous_clade = None
         for i, c in enumerate(children_sorted):
-            assign_node_coordinates(
+            clade = clade_label_getter(c)
+            if (i > 0) and (clade != previous_clade):
+                    left += 0.5
+
+            previous_clade = clade
+
+            left = assign_node_coordinates(
                 node=c,
                 left=left,
                 children_sort_key=children_sort_key,
+                flip_order_at_nodes=flip_order_at_nodes,
+                clade_label_getter=clade_label_getter,
             )
             x_children.append(c. x)
-            left += n_leafs(c)
+
+            if i < len(children_sorted) - 1:
+                left += 1
 
         node.x = np.mean(x_children)
 
+        return left
 
 def plot_tree_topology(
         node: Node,
         node_plotter: Callable = None,
         annotate_leafs: bool = False,
         annotate_internal_nodes: bool = False,
+        leaf_label_args: dict = None,
         ax: plt.Axes = None,
+        clade_color_getter: Optional[Callable] = None,
         **plot_kwargs
 ):
     """
@@ -106,35 +133,61 @@ def plot_tree_topology(
         float: the x coordinate of tree in the plot.
         float: the y coordinate of tree in the plot.
     """
-    if ax is None:
-        ax = plt.gca()
+    leaf_label_args = leaf_label_args or {}
+    ax = ax or plt.gca()
+
+    # if not ('c' in plot_kwargs or 'color' in plot_kwargs):
+    color = plot_kwargs.pop('color', 'k')
+    color = plot_kwargs.pop('c', color)
+    if clade_color_getter is None:
+        clade_color_getter = lambda _: color
 
     if node_plotter is not None:
         node_plotter(node, node.x, node.y, ax=ax)
 
-    if not ('c' in plot_kwargs or 'color' in plot_kwargs):
-        plot_kwargs['color'] = 'k'
-
     if node.descendants:
         for c in node.descendants:
-            ax.plot([node.x, c.x, c.x], [node.y, node.y, c.y], **plot_kwargs)
+            c: Node
+            yoffset = 0 if c.is_leaf else 15
+            ax.plot([node.x, c.x, c.x], [node.y, node.y, c.y + yoffset],
+                    c=clade_color_getter(node),
+                    **plot_kwargs)
             plot_tree_topology(
                 node=c,
                 node_plotter=node_plotter,
                 annotate_leafs=annotate_leafs,
+                annotate_internal_nodes=annotate_internal_nodes,
+                leaf_label_args=leaf_label_args,
+                clade_color_getter=clade_color_getter,
                 ax=ax,
                 **plot_kwargs
             )
 
     label_offset = 0.01 * get_height(get_root(node))
     if annotate_leafs and node.is_leaf:
-        plt.text(node.x, node.y - label_offset, node.name,
-                 horizontalalignment='center', verticalalignment='top',
-                 fontsize=10, rotation=90)
+        leaf_label_args.setdefault('fontsize', 10)
+        leaf_label_args.setdefault('horizontalalignment', 'center')
+        leaf_label_args.setdefault('verticalalignment', 'top')
+
+        leaf_labels_at_0 = True
+        if leaf_labels_at_0:
+            y = 0
+            if node.y > 0.000001:
+                plt.plot([node.x, node.x], [0, node.y], color='lightgray', ls='dotted', zorder=0)
+                print('...', node.name)
+        else:
+            y = node.y
+
+        x_offset = leaf_label_args.pop('x_offset', 0.0)
+        ax.text(node.x + x_offset, y - label_offset, node.name, **leaf_label_args)
+        leaf_label_args['x_offset'] = x_offset
+
     if annotate_internal_nodes and not node.is_leaf:
-        plt.text(node.x, node.y - label_offset, node.name,
+        ax.text(node.x, node.y - label_offset, node.name,
                  horizontalalignment='center', verticalalignment='top',
-                 fontsize=9)
+                 fontsize=20)
+
+
 
 def plot_network_topology(network, **plot_tree_args):
     tree = network.tree

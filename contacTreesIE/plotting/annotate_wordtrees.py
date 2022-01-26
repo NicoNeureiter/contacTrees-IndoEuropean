@@ -1,5 +1,4 @@
 import pandas as pd
-# from unidecode import unidecode
 
 df = pd.read_csv('ielex-subset.tsv', sep='\t', dtype=str)
 df['concept'] = df['cc_alias'].apply(lambda s: s.split('-')[0])

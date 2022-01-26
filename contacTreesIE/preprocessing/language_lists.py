@@ -16,7 +16,8 @@ GERMANIC = [
 ]
 ROMANCE = [
     'Umbrian', 'Oscan',  'Latin', 'Provencal', 'French', 'Walloon', 'Spanish', 'Portuguese_ST', 'Catalan', 'Sardinian_N',
-    'Sardinian_L', 'Sardinian_C', 'Rumanian_List', 'Vlach', 'Italian', 'Ladin', 'Friulian', 'Romansh', 'Dolomite_Ladino'
+    'Sardinian_L', 'Sardinian_C', 'Rumanian_List', 'Vlach', 'Italian', 'Ladin', 'Friulian', 'Romansh', 'Dolomite_Ladino',
+    'Latin_M', 'Latin_preserved'
 ]
 
 BALTO_SLAVIC = [

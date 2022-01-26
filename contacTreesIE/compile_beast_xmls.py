@@ -11,11 +11,11 @@ import pandas as pd
 from newick import Node, parse_node
 
 from contacTreesIE.newick_util import get_sibling, translate_node_names, get_age, get_node_by_name
-from contacTreesIE.pre.language_lists import *
-from contacTreesIE.pre import xml_snippets
-from contacTreesIE.pre.xml_snippets import Samplers
-from contacTreesIE.pre.starting_trees import CHANG_MEDIUM_TREE
-from contacTreesIE.pre.starting_trees import CHANG_MEDIUM_TRANSLATE
+from contacTreesIE.preprocessing.language_lists import *
+from contacTreesIE.preprocessing import xml_snippets
+from contacTreesIE.preprocessing.xml_snippets import Samplers
+from contacTreesIE.preprocessing.starting_trees import CHANG_MEDIUM_TREE
+from contacTreesIE.preprocessing.starting_trees import CHANG_MEDIUM_TRANSLATE
 
 XML_TEMPLATE_PATH = 'resources/ie_template.xml'
 LOANS_CSV_PATH = 'loans.csv'
@@ -29,6 +29,8 @@ INCLUDED_LANGUAGES = [l for l in DATASET if l in INCLUDED_CLADES] + [MEDIEVAL_LA
 RENAME = RENAME_CHANG
 translate = CHANG_MEDIUM_TRANSLATE
 STARTING_TREE = CHANG_MEDIUM_TREE
+
+SA_PRIOR_SIGMA = 100.0
 
 TIP_DATES = defaultdict(float)
 TIP_DATES.update({
@@ -130,7 +132,7 @@ post_OI = Clade(
 old_irish_irish_scots = Clade(
     name='Old_Irish_Irish_Scots',
     members=['Old_Irish', post_OI],
-    age_prior='<distr id="OldIrish_SA.tmrca" spec="Normal" offset="1250" sigma="100"/>'
+    age_prior=f'<distr id="OldIrish_SA.tmrca" spec="Normal" offset="1250" sigma="{SA_PRIOR_SIGMA}"/>'
 )
 brythonic = Clade(
     name='Brythonic',
@@ -185,7 +187,7 @@ post_ON = Clade(
 old_norse_icelandic_faroese = Clade(
     name='Old_Norse_Icelandic_Faroese',
     members=['Old_Norse', post_ON],
-    age_prior='<distr id="OldNorse_SA.tmrca" spec="Normal" offset="775" sigma="100"/>'
+    age_prior=f'<distr id="OldNorse_SA.tmrca" spec="Normal" offset="775" sigma="{SA_PRIOR_SIGMA}"/>'
 )
 north_germanic = Clade(
     name='NorthGermanic',
@@ -202,15 +204,12 @@ post_OHG = Clade(
 high_german = Clade(
     name='High_German',
     members=['Old_High_German', post_OHG],
-    age_prior={
-        CalibrationModes.CHANG: '',
-        CalibrationModes.BOUCKAERT: '<distr id="High_German_SA.tmrca" spec="Normal" mean="1050" sigma="50"/>',
-    },
+    age_prior=f'<distr id="High_German_SA.tmrca" spec="Normal" mean="1050" sigma="{SA_PRIOR_SIGMA}"/>',
 )
 english_clade = Clade(
     name='English_Clade',
     members=['Old_English', 'English'],
-    age_prior='<distr id="English_SA.tmrca" spec="Normal" mean="1000" sigma="100"/>'
+    age_prior=f'<distr id="English_SA.tmrca" spec="Normal" mean="1000" sigma="{SA_PRIOR_SIGMA}"/>'
 )
 west_germanic = Clade(
     name='WestGermanic',
@@ -325,7 +324,7 @@ def parse_loanwords(ielex: pd.DataFrame):
         concepts_grouped.set_index('language')
         for i_cc, (_, cc_grouped) in enumerate(concepts_grouped.groupby('cc_id')):
             for _, row in cc_grouped.iterrows():
-                if row.status in ('LOAN', 'LOAN,EXCLUDE'):
+                if row.status in ('LOAN',):  #, 'LOAN,EXCLUDE'):
                     loans.loc[concept, row.language] = 1
     return loans
 
@@ -421,7 +420,7 @@ def compile_ielex_xml(data_raw: dict, ascertainment_correction=True, min_coverag
             Clade(
                 name='Latin_descendants',
                 members=['Latin', MEDIEVAL_LATIN],
-                age_prior='<distr id="Latin_SA.tmrca" spec="Normal" offset="2050" sigma="10"/>',
+                age_prior='<distr id="Latin_SA.tmrca" spec="Normal" offset="2050" sigma="20"/>',
             )
         )
 
@@ -728,7 +727,7 @@ if __name__ == '__main__':
     #     print(concept.ljust(15), a_lexeme.ljust(15), b_lexemes)
     #
     # exit()
-    path_base, _, path_ext = str(DATA_PATH).rpartition(',')
+    path_base, _, path_ext = str(DATA_PATH).rpartition('.')
     subset_path = path_base + '-subset.tsv'
     ielex_df = filter_languages(ielex_df)
     ielex_df.to_csv(subset_path, sep='\t', index=False)
@@ -743,79 +742,6 @@ if __name__ == '__main__':
     N_RUNS = 5
 
     RUN_CONFIGURATIONS = {
-        # 'CT_full': {'use_contactrees': True,
-        #             'fixed_topolgy': False,
-        #             'fixed_node_heights': False,
-        #             'exclude_loans': False},
-        #
-        # 'BT_full': {'use_contactrees': False,
-        #             'fixed_topolgy': False,
-        #             'fixed_node_heights': False,
-        #             'exclude_loans': False},
-
-        # 'CT_fixTopo/noPL': {
-        #     'sampler': Samplers.MC3,
-        #     'chain_length': 40000000,
-        #     'use_contactrees': True,
-        #     'fixed_topolgy': True,
-        #     'fixed_node_heights': False,
-        #     'exclude_loans': False
-        # },
-        #
-        # 'BT_fixTopo/noPL': {
-        #     'sampler': Samplers.MCMC,
-        #     'chain_length': 15000000,
-        #     'use_contactrees': False,
-        #     'fixed_topolgy': True,
-        #     'fixed_node_heights': False,
-        #     'exclude_loans': False,
-        #     'add_zombie_latin': False
-        # },
-
-        # 'CT_fixTree': {'use_contactrees': True,
-        #                   'fixed_topolgy': True,
-        #                   'fixed_node_heights': True,
-        #                   'exclude_loans': False},
-        #
-        # 'BT_fixTree': {'use_contactrees': False,
-        #                   'fixed_topolgy': True,
-        #                   'fixed_node_heights': True,
-        #                   'exclude_loans': False},
-
-        # basicTrees excluding loans:
-
-        # 'BT_full/noLoans': {'use_contactrees': False,
-        #                     'fixed_topolgy': False,
-        #                     'fixed_node_heights': False,
-        #                     'exclude_loans': True},
-
-        # 'BT_fixTopo/noLoans/': {
-        #     'sampler': Samplers.MCMC,
-        #     'chain_length': 15000000,
-        #     'use_contactrees': False,
-        #     'fixed_topolgy': True,
-        #     'fixed_node_heights': False,
-        #     'exclude_loans': True,
-        #     'add_zombie_latin': True
-        # },
-
-        # 'BT_fixTree/noLoans': {'use_contactrees': False,
-        #                          'fixed_topolgy': False,
-        #                          'fixed_node_heights': False,
-        #                          'exclude_loans': True},
-
-        # Include preserved (zombie) latin in the analysis
-
-        'BT_fixTopo/ctmc': {
-            'sampler': Samplers.MCMC,
-            'chain_length': 20000000,
-            'use_contactrees': False,
-            'fixed_topolgy': True,
-            'fixed_node_heights': False,
-            'exclude_loans': False,
-            'add_zombie_latin': True,
-            'use_covarion': False,
-        },
 
         'BT_fixTopo/covarion': {
             'sampler': Samplers.MCMC,
@@ -839,39 +765,15 @@ if __name__ == '__main__':
             'use_covarion': True,
         },
 
-        # 'BT_fixTopo/covarion_clockStdv01': {
-        #     'sampler': Samplers.MCMC,
-        #     'chain_length': 20000000,
-        #     'use_contactrees': False,
-        #     'fixed_topolgy': True,
-        #     'fixed_node_heights': False,
-        #     'exclude_loans': False,
-        #     'add_zombie_latin': True,
-        #     'use_covarion': True,
-        #     'clock_stdev_prior': 0.1,
-        # },
-        #
-        # 'BT_fixTopo/covarion_noLoans_clockStdv01': {
-        #     'sampler': Samplers.MCMC,
-        #     'chain_length': 20000000,
-        #     'use_contactrees': False,
-        #     'fixed_topolgy': True,
-        #     'fixed_node_heights': False,
-        #     'exclude_loans': True,
-        #     'add_zombie_latin': True,
-        #     'use_covarion': True,
-        #     'clock_stdev_prior': 0.1,
-        # },
-
-        'CT_fixTopo/ctmc': {
-            'sampler': Samplers.MC3,
+        'BT_full': {
+            'sampler': Samplers.MCMC,
             'chain_length': 20000000,
-            'use_contactrees': True,
-            'fixed_topolgy': True,
+            'use_contactrees': False,
+            'fixed_topolgy': False,
             'fixed_node_heights': False,
             'exclude_loans': False,
             'add_zombie_latin': True,
-            'use_covarion': False,
+            'use_covarion': True
         },
 
         'CT_fixTopo/covarion': {
@@ -896,38 +798,6 @@ if __name__ == '__main__':
             'use_covarion': True
         },
 
-        # 'NS/CT_fixTopo/ctmc': {
-        #     'sampler': Samplers.NS,
-        #     'chain_length': 40000000,
-        #     'use_contactrees': True,
-        #     'fixed_topolgy': True,
-        #     'fixed_node_heights': False,
-        #     'exclude_loans': False,
-        #     'add_zombie_latin': True,
-        #     'use_covarion': False,
-        # },
-        # 
-        # 'NS/CT_fixTopo/covarion': {
-        #     'sampler': Samplers.NS,
-        #     'chain_length': 40000000,
-        #     'use_contactrees': True,
-        #     'fixed_topolgy': True,
-        #     'fixed_node_heights': False,
-        #     'exclude_loans': False,
-        #     'add_zombie_latin': True,
-        #     'use_covarion': True,
-        # },
-        # 
-        # 'NS/BT_fixTopo/covarion': {
-        #     'sampler': Samplers.NS,
-        #     'chain_length': 40000000,
-        #     'use_contactrees': False,
-        #     'fixed_topolgy': True,
-        #     'fixed_node_heights': False,
-        #     'exclude_loans': False,
-        #     'add_zombie_latin': True,
-        #     'use_covarion': True,
-        # },
     }
 
     for run_name, kwargs in RUN_CONFIGURATIONS.items():

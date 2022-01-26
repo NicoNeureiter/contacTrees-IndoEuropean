@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 import os
 from pathlib import Path
-from typing import List, Dict
+from typing import List, Dict, Tuple, Optional
 from operator import attrgetter
 from collections import defaultdict
 from enum import IntEnum
@@ -14,17 +14,15 @@ from nexus import NexusReader
 
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
+import matplotlib.transforms as transforms
 
 from contacTreesIE.newick_util import get_age, ContactEdge, get_actual_leaves, collect_contactedges, drop_contactedges, \
     translate_node_names, remove_dead_end
 
-GRAY_0 = (0.95, 0.95, 0.95)
-GRAY_1 = (0.85, 0.85, 0.85)
-GRAY_2 = (0.65, 0.65, 0.65)
-GRAY_3 = (0.5, 0.5, 0.5)
-CEDGE_COLOR = (0.85, 0.65, 0)
-DONOR_COLOR = (0., 0.6, 0.55)
-RECEIVER_COLOR = (0.8, 0.3, 0)
+from contacTreesIE.plotting import GRAY_0, GRAY_1, GRAY_75, GRAY_2, GRAY_3, CEDGE_COLOR, DONOR_COLOR, RECEIVER_COLOR
+from contacTreesIE.plotting import plot_tree_topology, assign_node_coordinates
+from contacTreesIE.preprocessing.language_lists import GERMANIC, CELTIC, ROMANCE
+
 
 class ZOrder(IntEnum):
 
@@ -36,43 +34,75 @@ class ZOrder(IntEnum):
     WORD_TREE = 6
     CONTACT_EDGE_HIGHLIGHTED = 10
 
-# TODO plot each summary tree with transparent contact edge samples (densitree style)
-# TODO same for single word trees to visualize
-# TODO [not plotting] simply summarize where each loan word came from in each language
 
+# CLADE_COLORS = dict(
+#     # CELTIC=(0.08, 0.7, 0.04),
+#     CELTIC=(0.6, 0.05, 0.7),
+#     GERMANIC=(0.8, 0.03, 0.03),
+#     ROMANCE=(0.95, 0.6, 0.0),
+# )
 
-# class ContacTree(object):
 #
-#     """Class encapsulating python-newick trees and adds conversion edges to represent an
-#     contacTree.
-#
-#     Attributes:
-#         root (Node): ...
-#         contact_edges (List[ContactEdge]): ...
-#     """
-#
-#     def __init__(self,
-#                  node: Node,
-#                  contactedges: dict = None):
-#         self.root = node
-#         if contactedges is None:
-#             self.contactedges = {}
-#         else:
-#             self.contactedges = contactedges
+# CLADE_COLORS = dict(
+#     CELTIC=(0.75, 0.05, 0.6),
+#     GERMANIC=(0.9, 0.6, 0.0),
+#     ROMANCE=(0.0, 0.7, 0.7),
+# )
+
+CLADE_COLORS = dict(
+    # CELTIC=(0.4, 0., 0.),
+    # GERMANIC=(0., 0.5, 0.),
+    # ROMANCE=(0., 0.0, 0.5),
+)
+
+CLADES = dict(
+    CELTIC=set(CELTIC),
+    GERMANIC=set(GERMANIC),
+    ROMANCE=set(ROMANCE),
+)
 
 
-def read_contactedges(nexus: NexusReader, burnin=0.1, return_n_samples=False) -> List[ContactEdge]:
+def get_clade_color(node: Node, default='k'):
+    clade_name = get_clade_label(node)
+    return CLADE_COLORS.get(clade_name, default)
+
+
+def get_clade_label(node: Node) -> str:
+    node_clade = set(node.get_leaf_names())
+
+    for other_name, other_clade in CLADES.items():
+        if node_clade.issubset(other_clade):
+            return other_name
+
+    return '?'
+
+name_mapping = {
+    'Latin_preserved': 'Latin\n(present)',
+    'Latin_M': 'Latin\n(medieval)',
+    'Breton_ST': 'Breton',
+    'Welsh_N': 'Welsh',
+    'Scots_Gaelic': 'Scots\nGaelic',
+    'Old_High_German': 'Old High\nGerman',
+    'Old_English': 'Old English',
+    'Rumanian_List': 'Rumanian\nList',
+    'Portuguese_ST': 'Portuguese',
+}
+
+
+def read_contactedges(nexus: NexusReader, burnin=0.1, return_n_samples=False,
+                      block_posterior_threshold=0.5) -> List[ContactEdge]:
     translate = nexus.trees.translators
     tree_handler = nexus.trees
+
     n_burnin_samples = int(burnin * tree_handler.ntrees)
-    trees: List[Node] = [t.newick_tree for t in tree_handler.trees[n_burnin_samples::4]]
+
+    trees: List[Node] = [t.newick_tree for t in tree_handler.trees[n_burnin_samples::10]]
     n_samples = len(trees)
-    print(n_samples)
 
     contactedges = []
     for tree in trees:
         translate_node_names(tree, translate)
-        contactedges += collect_contactedges(tree)
+        contactedges += collect_contactedges(tree, block_posterior_threshold=block_posterior_threshold)
 
     if return_n_samples:
         return contactedges, n_samples
@@ -130,11 +160,12 @@ def place_contactedges_in_tree(
         #         contactedges.remove(cedge)
 
 
-def plot_contactedges(contactedges, word=None, arrow=False, **plot_kwargs):
+def plot_contactedges(contactedges, word=None, arrow=False, ax=None, **plot_kwargs):
+    ax = ax or plt.gca()
     zorder = plot_kwargs.pop('zorder', ZOrder.CONTACT_EDGE)
     plot_kwargs['color'] = plot_kwargs.pop('c', 'k')
     width = plot_kwargs.pop('lw', 1.0)
-    head_width = 3. * width
+    head_width = 4. * width
 
     if word is not None:
         contactedges = filter(lambda ce: word in ce.affected_blocks, contactedges)
@@ -146,31 +177,33 @@ def plot_contactedges(contactedges, word=None, arrow=False, **plot_kwargs):
         direction = np.sign(x2 - x1)
 
         if arrow:
-            plt.arrow(x=x1, y=y, dx=(x2-x1), dy=0, width=width,
-                      length_includes_head=True, head_width=head_width, head_length=0.1,
-                      ec=(0., 0., 0.), lw=0.1,
+            ax.arrow(x=x1, y=y, dx=(x2-x1), dy=0, width=width,
+                      length_includes_head=True, head_width=head_width, head_length=0.25,
+                      ec=(0., 0., 0.), lw=0.0,
                       zorder=ZOrder.CONTACT_EDGE_STUB, **plot_kwargs)
 
         else:
-            plt.plot([x1, x2], [y, y], lw=width, zorder=zorder, **plot_kwargs)
-            plt.plot([x2 - direction*0.5, x2 - direction*0.05], [y, y], lw=width, zorder=ZOrder.CONTACT_EDGE_STUB, **plot_kwargs)
+            ax.plot([x1, x2], [y, y], lw=width, zorder=zorder, **plot_kwargs)
+            # ax.plot([x2 - direction*0.5, x2 - direction*0.05], [y, y], lw=width, zorder=ZOrder.CONTACT_EDGE_STUB, **plot_kwargs)
 
 
-def plot_contactedge_arrow(cedge, **plot_kwargs):
+def plot_contactedge_arrow(cedge, ax=None, **plot_kwargs):
+    ax = ax or plt.gca()
     zorder = plot_kwargs.pop('zorder', ZOrder.CONTACT_EDGE_HIGHLIGHTED)
     plot_kwargs['color'] = plot_kwargs.pop('c', 'k')
     width = plot_kwargs.pop('lw', 1.0)
-    head_width = 3. * width
+    plot_kwargs.setdefault('head_width', 3. * width)
+    plot_kwargs.setdefault('head_length', 0.2)
 
     x1 = cedge.donor_node.x
     x2 = cedge.receiver_node.x
     y = cedge.height
     direction = np.sign(x2 - x1)
 
-    plt.arrow(x=x1 + 0.3*direction, y=y, dx=(x2-x1) - 0.6*direction, dy=0, width=width,
-              length_includes_head=True, head_width=head_width, head_length=0.2,
-              ec=(1., 1., 1.), lw=0.1,
+    ax.arrow(x=x1 + 0.3*direction, y=y, dx=(x2-x1) - 0.6*direction, dy=0, width=width,
+              length_includes_head=True, ec=(1., 1., 1.), lw=0.1,
               zorder=zorder, **plot_kwargs)
+
 
 def plot_densiedges(trees_nexus, summarytree_nexus):
     contactedges = read_contactedges(nexus=trees_nexus)
@@ -269,21 +302,18 @@ def clean_lexeme(lexeme):
 
 
 def plot_word_labels(
-        nexus: NexusReader,
+        tree: Node,
         words=None,
         word_support: Dict[str, float] = None,
         donor_clade: List[str] = None,
         receiver_clade: List[str] = None,
         header_interval: int = 20,
         no_tree: bool = False,
+        wordlimit: int = None,
         ax: plt.Axes = None
 ):
-    if ax is None:
-        ax = plt.gca()
-
-    tree = read_tree(nexus)
-    drop_contactedges(tree)
-    assign_node_coordinates(tree)
+    ax = ax or plt.gca()
+    wordlimit = wordlimit or 1000000
 
     # Load ielex dataset for lexemes
     df = pd.read_csv('resources/data-mittellatein-2021-09-30.csv', sep='\t', dtype=str)
@@ -362,27 +392,36 @@ def plot_word_labels(
         if not no_tree:
             # Plot a visual connection from label to leaf, if leaf isn't contemporary
             if get_age(node) > 0.001:
-                plt.plot(
+                ax.plot(
                     [node.x, node.x], [0, node.y],
                     color='lightgray', ls='dotted',
                     zorder=0
                 )
 
         y = Y_TOP + 0.5*DY
-        for i, word in enumerate(words):
+        for i, word in enumerate(words[:wordlimit]):
             if i % header_interval == 0:
-                y -= 0.5*DY
-                plt.text(x=node.x, y=y, s=node.name, weight='bold', **text_args)
+                y -= 0.5 * DY
+                ax.text(x=node.x, y=y,
+                        s=name_mapping.get(node.name, node.name),
+                        weight='semibold', clip_on=True,
+                        # rotation=50,
+                        # horizontalalignment='right',
+                        # verticalalignment='top',
+                        # fontsize=7.5,
+                        **text_args,
+                        )
                 y -= DY
 
-            plt.text(
+            ax.text(
                 x=node.x,
                 y=y,
                 s=get_word_in_language(node.name, word),
+                clip_on=True,
                 **text_args
             )
             c = get_cognate_colors(node.name, word)
-            plt.scatter(
+            ax.scatter(
                 x=node.x + np.linspace(-0.3, 0.3, len(c)+2)[1:-1],
                 y=[y + 60] * len(c),
                 c=c,
@@ -406,29 +445,32 @@ def plot_word_labels(
                     color=GRAY_0,
                     # alpha=0.5,
                     zorder=0,
+                    clip_on=True,
                 )
             )
 
     # Plot the meaning class labels
     y = Y_TOP + 0.5*DY
-    for i, word in enumerate(words):
+    for i, word in enumerate(words[:wordlimit]):
         if i % header_interval == 0:
             y -= 1.5*DY
 
-        plt.text(
+        ax.text(
             x=-1.2,
             y=y,
             s=word,
-            weight='bold',
+            weight='semibold',
+            clip_on=True,
             **text_args
         )
 
         if word_support:
-            plt.text(
+            ax.text(
                 x=-1.2,
                 y=y - (0.3 * DY),
                 s=f'{word_support[word]:.2f}',
                 color='grey',
+                clip_on=True,
                 **text_args
             )
 
@@ -471,10 +513,13 @@ def plot_wordtrees(nexus: NexusReader, word_trees_directory=Path('./wordtrees/')
         for word in words:
             print('\t\t', word)
 
+        tree = read_tree(nexus)
+        drop_contactedges(tree)
+        assign_node_coordinates(tree)
 
         plot_network(nexus, annotate_leafs=False)
         plot_wordtree(nexus, word=words[0])
-        plot_word_labels(nexus, words=words)
+        plot_word_labels(tree, words=words)
         plt.axis('off')
         plt.tight_layout(pad=0)
             # plt.grid(axis='y')
@@ -490,7 +535,8 @@ def plot_wordtrees(nexus: NexusReader, word_trees_directory=Path('./wordtrees/')
 def plot_contactedge_with_data(summary_nexus: NexusReader,
                                samples_nexus: NexusReader,
                                edge_trees_directory=Path('./wordtrees/'),
-                               burnin=0.1, summary_distance_threshold=4):
+                               burnin=0.1, summary_distance_threshold=4,
+                               block_posterior_threshold=0.5):
     """Plot the contacTree with one edge highlighted and the words borrowed at this edge.
     Store the plots as PDF files in `edge_trees_directory`."""
     # Create the word-trees directory
@@ -498,7 +544,7 @@ def plot_contactedge_with_data(summary_nexus: NexusReader,
 
     # Read the contact edges and attach them to nodes in the `nexus` tree.
     tree = read_tree(summary_nexus)
-    contactedges = read_contactedges(summary_nexus, burnin=burnin)
+    contactedges = read_contactedges(summary_nexus, burnin=burnin, block_posterior_threshold=block_posterior_threshold)
     place_contactedges_in_tree(tree, contactedges)
 
     cedge_samples, n_samples = read_contactedges(samples_nexus, burnin=burnin, return_n_samples=True)
@@ -587,7 +633,7 @@ def plot_contactedge_with_data(summary_nexus: NexusReader,
 
         add_grid_lines(plt.gca(), max_y=get_age(tree))
 
-        plot_word_labels(nexus=summary_nexus, words=words, word_support=cedge.block_posterior,
+        plot_word_labels(tree=tree, words=words, word_support=cedge.block_posterior,
                          donor_clade=donor_clade, receiver_clade=receiver_clade, ax=ax)
         plt.axis('off')
         plt.tight_layout()
@@ -598,16 +644,37 @@ def plot_contactedge_with_data(summary_nexus: NexusReader,
         # plt.show()
 
 
-def add_grid_lines(ax, max_y=5000.0, dy=1000.0):
-    for y in np.arange(dy, max_y + 1, dy, dtype=int):
-        ax.axhline(y, color='gray', lw=0.25, zorder=ZOrder.GRID_LINE)
+def add_grid_lines(ax, min_y=1000.0, max_y=5000.0, dy=1000.0,
+                   zorder=ZOrder.GRID_LINE, format='%g', clip_on=False,
+                   grid_values=None):
+    transform_x_axes_y_data = transforms.blended_transform_factory(ax.transAxes, ax.transData)
+
+    if grid_values is None:
+        grid_values = np.arange(min_y, max_y, dy)
+    else:
+        dy = grid_values[1] - grid_values[0]
+
+    for y in grid_values:
+        ax.axhline(y, color='gray', lw=0.25, zorder=zorder)
+        if isinstance(format, str):
+            y_str = format % y
+        else:
+            assert hasattr(format, '__call__')
+            y_str = format(y)
+
         ax.text(
-            -1.5, y - 20, str(y),
-            horizontalalignment='center',
+            x=0.004,
+            y=y - 0.07*dy,
+            s=y_str,
+            horizontalalignment='left',
             verticalalignment='top',
+            # fontweight='semibold',
             fontsize=10,
-            color='lightgray'
+            color='gray',
+            clip_on=clip_on,
+            transform=transform_x_axes_y_data,
         )
+
 
 def plot_contact_to(receiver: str, summary_nexus: NexusReader, posterior_nexus: NexusReader):
     print(posterior_nexus.trees.translators)
@@ -633,16 +700,9 @@ def plot_contact_to(receiver: str, summary_nexus: NexusReader, posterior_nexus: 
     assign_node_coordinates(tree)
     plot_tree_topology(tree, annotate_leafs=True, lw=2, color='k', zorder=ZOrder.LANGUAGE_TREE)
 
-    # # Plot internal nodes
-    # x = [node.x for node in tree.walk() if not node.is_leaf] + [c.donor_node.x for c in contactedges]
-    # y = [node.y for node in tree.walk() if not node.is_leaf] + [c.height for c in contactedges]
-    # plt.scatter(x, y, s=100, color=GRAY_2, zorder=ZOrder.LANGUAGE_TREE)
-
     x_donor = [c.donor_node.x for c in contactedges]
     x_receiver = [c.receiver_node.x for c in contactedges]
     y = [c.height for c in contactedges]
-    # plt.scatter(x_donor, y, s=50, color='teal', alpha=0.02, marker='_', zorder=ZOrder.WORD_TREE)
-    # plt.scatter(x_receiver, y, s=50, color='magenta', alpha=0.02, marker='_', zorder=ZOrder.WORD_TREE)
     plt.scatter(x_donor, y, s=50, color='teal', alpha=1.0, lw=0.1, marker='_', zorder=ZOrder.WORD_TREE)
     plt.scatter(x_receiver, y, s=50, color='magenta', alpha=1.0, lw=0.1, marker='_', zorder=ZOrder.WORD_TREE)
     plt.scatter([], [], color='teal', marker='_', label='Donor end of a contact edge')
@@ -669,46 +729,25 @@ def plot_contact_to(receiver: str, summary_nexus: NexusReader, posterior_nexus: 
 
     # plot_word_labels(summary_nexus)
 
+
 if __name__ == '__main__':
-    from contacTreesIE.plotting import plot_tree_topology, assign_node_coordinates
-
-    # fig, ax = plt.subplots(figsize=(30, 95))
-
-    # TREES_PATH = Path('/home/nico/workspace/IE_case_study/small_runs/CT_fixTopo/noPreservedLatin/CT_fixTopo.trees')
-    # TREES_PATH = Path('results/workstation/CT_fixedTopology_preservedLatin/CT_fixTopo_pL.trees')
-    # SUMMARYTREE_PATH = Path('results/workstation/CT_fixedTopology_preservedLatin/CT_fixTopo_pL.summary.tree')
-    # TREES_PATH = Path('results/workstation/CT_fixTopo/covarion/CT_fixTopo_covarion_1.trees')
-    # SUMMARYTREE_PATH = Path('results/workstation/CT_fixTopo/covarion/CT_fixTopo_covarion_1.summary.tree')
-    # TREES_PATH = Path('small_runs/CT_fixTopo/covarion/CT_fixTopo_covarion_1.trees')
-    # SUMMARYTREE_PATH = Path('small_runs/CT_fixTopo/covarion/CT_fixTopo_covarion_1.summary.tree')
-    TREES_PATH = Path('results/fixTopo_covarion.trees')
-    SUMMARYTREE_PATH = Path('results/fixTopo_covarion.summary.tree')
-    # samples_nexus = NexusReader.from_file(TREES_PATH)
+    TREES_PATH = Path('results/fix_clock_stdev/CT_fixTopo/covarion/CT_fixTopo_covarion.trees')
+    SUMMARYTREE_PATH = Path('results/fix_clock_stdev/CT_fixTopo/covarion/CT_fixTopo_covarion.summary.tree')
+    samples_nexus = NexusReader.from_file(TREES_PATH)
     summary_nexus = NexusReader.from_file(SUMMARYTREE_PATH)
 
-    fig, ax = plt.subplots(figsize=(60, 90))
-
-    # plot_network(summary_nexus, annotate_leafs=False)
-    # plot_wordtree(summary_nexus, word='lake')
-    plot_word_labels(
-        summary_nexus,
-        header_interval=6,
-        no_tree=True,
-        ax=ax
+    plot_contactedge_with_data(
+        summary_nexus=summary_nexus,
+        samples_nexus=samples_nexus,
+        edge_trees_directory=Path('./loanwords_per_contact_edge_fixedStdev_pMin=0.25/'),
+        block_posterior_threshold=0.25,
+        burnin=0.0,
     )
-    # plot_word_labels(summary_nexus)
 
-    # plot_contact_to('2_Danish', summary_nexus, posterior_nexus)
-    # plot_contact_to('2_English', summary_nexus, posterior_nexus)
-    # plot_contact_to('3_German', summary_nexus, posterior_nexus)
-
-    # plot_contactedge_with_data(summary_nexus=summary_nexus,
-    #                            samples_nexus=samples_nexus,
-    #                            edge_trees_directory=Path('./loanwords_per_contact_edge/'))
-
-
-    plt.axis('off')
-    plt.tight_layout(pad=0.01)
-    plt.savefig('wordlist.pdf')
+    # fig, ax = plt.subplots(figsize=(60, 90))
+    # plot_word_labels(summary_nexus, header_interval=6, no_tree=True, ax=ax)
+    # plt.axis('off')
+    # plt.tight_layout(pad=0.01)
+    # plt.savefig('wordlist.pdf')
 
     # plot_wordtrees(summary_nexus, word_trees_directory=Path('./wordtrees_tmp/'))
