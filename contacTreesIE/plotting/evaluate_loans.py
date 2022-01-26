@@ -8,8 +8,8 @@ import matplotlib.pyplot as plt
 from nexus import NexusReader
 from newick import Node
 
-from contacTreesIE.parse_ielex import read_dataset
-from contacTreesIE.plotting.plot_contactrees import read_contactedges, place_contactedges_in_tree
+from contacTreesIE.compile_beast_xmls import read_dataset
+from contacTreesIE.plotting.plot_contact_edges import read_contactedges, place_contactedges_in_tree
 from contacTreesIE.newick_util import collect_contactedges, drop_contactedges, ContactEdge
 
 

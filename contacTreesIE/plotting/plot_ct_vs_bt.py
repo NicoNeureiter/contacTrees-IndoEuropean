@@ -1,28 +1,19 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-import os
 import string
 from pathlib import Path
-from typing import List, Dict
-from operator import attrgetter
-from collections import defaultdict
-from enum import IntEnum
 
 import numpy as np
 import pandas as pd
-from newick import Node
 from nexus import NexusReader
 
 import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
 import seaborn as sns
 
-from contacTreesIE.newick_util import get_age, ContactEdge, get_actual_leaves, collect_contactedges, drop_contactedges, \
-    translate_node_names, remove_dead_end
+from contacTreesIE.newick_util import get_age
 
-from contacTreesIE.plotting import GRAY_0, GRAY_1, GRAY_2, GRAY_3, DONOR_COLOR, RECEIVER_COLOR
 from contacTreesIE.plotting import plot_tree_topology, assign_node_coordinates
-from contacTreesIE.plotting.plot_contactrees import read_tree, add_grid_lines, plot_contactedges, place_contactedges_in_tree, read_contactedges
+from contacTreesIE.plotting.plot_contact_edges import read_tree, add_grid_lines, plot_contactedges, place_contactedges_in_tree, read_contactedges
 
 COLOR_PALETTE = [
     (0.65, 0.25, 0.85, 1.0),

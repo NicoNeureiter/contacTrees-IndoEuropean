@@ -1,5 +1,5 @@
 from operator import attrgetter
-from typing import Union, Set, List, Dict, Optional
+from typing import Union, List, Dict, Optional
 
 from newick import Node
 

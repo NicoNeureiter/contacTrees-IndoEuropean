@@ -8,17 +8,6 @@ from nexus import NexusReader
 from contacTreesIE.plotting import color_tree, plot_tree_topology
 
 
-# class Node(newick.Node):
-#
-#     def __init__(self, depth, *args, **kwargs):
-#         self.depth = depth
-#         super(Node, self).__init__(*args, **kwargs)
-#
-#     def from_newick_root(self, newick_root: newick.Node, depth=0):
-#         root = Node(depth, newick_root)
-#         for child in newick_root.get
-
-
 def get_node_depths(root:Node, depth: float, depth_dict: dict):
     depth_dict[root] = depth
     for child in root.descendants:
