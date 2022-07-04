@@ -1,1 +1,1 @@
-from plotting import *
+from contacTreesIE.plotting.plotting import *

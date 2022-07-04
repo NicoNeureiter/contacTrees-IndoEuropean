@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+from __future__ import annotations
 import os
 from pathlib import Path
 from typing import List, Dict, Tuple, Optional
 from operator import attrgetter
 from collections import defaultdict
 from enum import IntEnum
+import argparse
 
 import numpy as np
 import pandas as pd
@@ -25,7 +27,6 @@ from contacTreesIE.preprocessing.language_lists import GERMANIC, CELTIC, ROMANCE
 
 
 class ZOrder(IntEnum):
-
     GRID_LINE = 1
     CONTACT_EDGE = 2
     LANGUAGE_TREE_FRAME = 3
@@ -34,20 +35,6 @@ class ZOrder(IntEnum):
     WORD_TREE = 6
     CONTACT_EDGE_HIGHLIGHTED = 10
 
-
-# CLADE_COLORS = dict(
-#     # CELTIC=(0.08, 0.7, 0.04),
-#     CELTIC=(0.6, 0.05, 0.7),
-#     GERMANIC=(0.8, 0.03, 0.03),
-#     ROMANCE=(0.95, 0.6, 0.0),
-# )
-
-#
-# CLADE_COLORS = dict(
-#     CELTIC=(0.75, 0.05, 0.6),
-#     GERMANIC=(0.9, 0.6, 0.0),
-#     ROMANCE=(0.0, 0.7, 0.7),
-# )
 
 CLADE_COLORS = dict(
     # CELTIC=(0.4, 0., 0.),
@@ -75,6 +62,7 @@ def get_clade_label(node: Node) -> str:
             return other_name
 
     return '?'
+
 
 name_mapping = {
     'Latin_preserved': 'Latin\n(present)',
@@ -303,6 +291,7 @@ def clean_lexeme(lexeme):
 
 def plot_word_labels(
         tree: Node,
+        data_path: Path | str,
         words=None,
         word_support: Dict[str, float] = None,
         donor_clade: List[str] = None,
@@ -316,7 +305,7 @@ def plot_word_labels(
     wordlimit = wordlimit or 1000000
 
     # Load ielex dataset for lexemes
-    df = pd.read_csv('resources/data-mittellatein-2021-09-30.csv', sep='\t', dtype=str)
+    df = pd.read_csv(data_path, sep='\t', dtype=str)
     df = df.loc[~df.status.isin(['EXCLUDE', 'LOAN,EXCLUDE', 'WRONG'])]
     df['concept'] = df['cc_alias'].apply(lambda s: s.split('-')[0])
 
@@ -477,8 +466,11 @@ def plot_word_labels(
         y -= DY
 
 
-
-def plot_wordtrees(nexus: NexusReader, word_trees_directory=Path('./wordtrees/')):
+def plot_wordtrees(
+    nexus: NexusReader,
+    data_path: Path | str,
+    word_trees_directory=Path('./wordtrees/')
+):
     """Plot all word trees with the corresponding words and store the plots as PDF files
     in `word_trees_directory`."""
 
@@ -519,24 +511,19 @@ def plot_wordtrees(nexus: NexusReader, word_trees_directory=Path('./wordtrees/')
 
         plot_network(nexus, annotate_leafs=False)
         plot_wordtree(nexus, word=words[0])
-        plot_word_labels(tree, words=words)
+        plot_word_labels(tree, data_path=data_path, words=words)
         plt.axis('off')
         plt.tight_layout(pad=0)
-            # plt.grid(axis='y')
-            # ax.set_xticklabels([])
-            # ax.set_yticklabels([])
-            # ax.set_frame_on(False)
-            # ax.tick_params(tick1On=False)
 
         plt.savefig(word_trees_directory / f'wordtree_{words[0]}_et_al.pdf')
-        # plt.show()
 
 
 def plot_contactedge_with_data(summary_nexus: NexusReader,
                                samples_nexus: NexusReader,
+                               data_path: Path | str,
                                edge_trees_directory=Path('./wordtrees/'),
                                burnin=0.1, summary_distance_threshold=4,
-                               block_posterior_threshold=0.5):
+                               block_posterior_threshold=0.5, show=False):
     """Plot the contacTree with one edge highlighted and the words borrowed at this edge.
     Store the plots as PDF files in `edge_trees_directory`."""
     # Create the word-trees directory
@@ -633,7 +620,8 @@ def plot_contactedge_with_data(summary_nexus: NexusReader,
 
         add_grid_lines(plt.gca(), max_y=get_age(tree))
 
-        plot_word_labels(tree=tree, words=words, word_support=cedge.block_posterior,
+        plot_word_labels(tree=tree, data_path=data_path,
+                         words=words, word_support=cedge.block_posterior,
                          donor_clade=donor_clade, receiver_clade=receiver_clade, ax=ax)
         plt.axis('off')
         plt.tight_layout()
@@ -641,7 +629,8 @@ def plot_contactedge_with_data(summary_nexus: NexusReader,
         donor_clade_str = '|'.join(donor_clade)
         receiver_clade_str = '|'.join(receiver_clade)
         plt.savefig(edge_trees_directory / f'from_[{donor_clade_str}]_to_[{receiver_clade_str}].pdf')
-        # plt.show()
+        if show:
+            plt.show()
 
 
 def add_grid_lines(ax, min_y=1000.0, max_y=5000.0, dy=1000.0,
@@ -730,18 +719,29 @@ def plot_contact_to(receiver: str, summary_nexus: NexusReader, posterior_nexus: 
     # plot_word_labels(summary_nexus)
 
 
-if __name__ == '__main__':
-    TREES_PATH = Path('results/fix_clock_stdev/CT_fixTopo/covarion/CT_fixTopo_covarion.trees')
-    SUMMARYTREE_PATH = Path('results/fix_clock_stdev/CT_fixTopo/covarion/CT_fixTopo_covarion.summary.tree')
-    samples_nexus = NexusReader.from_file(TREES_PATH)
-    summary_nexus = NexusReader.from_file(SUMMARYTREE_PATH)
+def main(
+    trees_path: Path | str,
+    summary_tree_path: Path | str,
+    data_path: Path | str,
+    out_path: Path | str,
+    show: bool = False
+):
+    # trees_path = Path('results/fix_clock_stdev/CT_fixTopo/covarion/CT_fixTopo_covarion.trees')
+    # summary_tree_path = Path('results/fix_clock_stdev/CT_fixTopo/covarion/CT_fixTopo_covarion.summary.tree')
+    # data_path = Path('resources/data-mittellatein-2021-09-30.csv')
+    # out_path = Path('./loanwords_per_contact_edge_fixedStdev_pMin=0.25/')
+
+    samples_nexus = NexusReader.from_file(trees_path)
+    summary_nexus = NexusReader.from_file(summary_tree_path)
 
     plot_contactedge_with_data(
         summary_nexus=summary_nexus,
         samples_nexus=samples_nexus,
-        edge_trees_directory=Path('./loanwords_per_contact_edge_fixedStdev_pMin=0.25/'),
+        data_path=data_path,
+        edge_trees_directory=out_path,
         block_posterior_threshold=0.25,
         burnin=0.0,
+        show=show
     )
 
     # fig, ax = plt.subplots(figsize=(60, 90))
@@ -749,3 +749,47 @@ if __name__ == '__main__':
     # plt.axis('off')
     # plt.tight_layout(pad=0.01)
     # plt.savefig('wordlist.pdf')
+
+
+def cli():
+    parser = argparse.ArgumentParser(description="Plot contacTrees results, one plot per edge.")
+    parser.add_argument(
+        "--trees",
+        type=Path,
+        required=True,
+        help="The .trees file containing the sampled networks in extended newick format."
+    )
+    parser.add_argument(
+        "--summary_tree",
+        type=Path,
+        required=True,
+        help="The summary tree file generated by ContactreesAnnotator."
+    )
+    parser.add_argument(
+        "--data",
+        type=Path,
+        required=True,
+        help="A CSV file containing information on the cognate data used for the "
+             "contacTrees analysis. Needs to contain the following columns: "
+             "language, cc_id, cc_alias, lexeme, status."
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        required=True,
+        help="The directory where the resulting contact edges plots should be saved."
+    )
+    parser.add_argument(
+        "--show",
+        type=bool,
+        default=False,
+        help="Whether or not to show the plot before saving it."
+    )
+
+    args = parser.parse_args()
+    main(args.trees, args.summary_tree, args.data, args.output,
+         show=args.show)
+
+
+if __name__ == '__main__':
+    cli()
