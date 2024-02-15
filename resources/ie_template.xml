@@ -104,7 +104,7 @@
     <!-- #######################################   PARAMETERS   ####################################### -->
 
     <!-- Network -->
-    <stateNode id="acg" spec="ConversionGraph" taxonset="@taxa" newick="{starting_tree}">
+    <stateNode id="acg" spec="contactrees.ConversionGraph" taxonset="@taxa" newick="{starting_tree}">
       <trait id="dateTrait" spec="beast.evolution.tree.TraitSet" traitname="date-backward">
 {dates}
         <taxa idref="taxa"/>

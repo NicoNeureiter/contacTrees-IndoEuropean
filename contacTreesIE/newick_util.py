@@ -115,7 +115,7 @@ def parse_node_comment(comment: str) -> dict:
     # Manually parse the `affectedBlocks` string
     attrs['affectedBlocks'] = set(attrs['affectedBlocks'][1:-1].split(','))
 
-    if 'blockPosterior' in attrs:
+    if 'blockPosterior' in attrs and isinstance(attrs['blockPosterior'], str):
         block_post_reformated = attrs['blockPosterior'].replace(':', '\':')\
                                                        .replace(',', ',\'')\
                                                        .replace('{', '{\'')
@@ -154,11 +154,7 @@ def collect_contactedges(tree: Node, block_posterior_threshold: float = 0.5) -> 
 
             # The donor node contains information about the contactedge in the comment
             # The receiver node has no comments
-            if node.comment is None:
-                assert not node.is_leaf
-                cedge.receiver_clade = compress_clade(node)
-
-            else:
+            if node.comment and '&conv' in node.comment:
                 assert node.is_leaf
                 cedge.donor_clade = compress_clade(node.ancestor)
                 node_attrs = parse_node_comment(node.comment)
@@ -169,6 +165,10 @@ def collect_contactedges(tree: Node, block_posterior_threshold: float = 0.5) -> 
                 ]
                 cedge.block_posterior = {b: node_attrs['blockPosterior'][b] for b in node_attrs['affectedBlocks']}
 
+            else:
+                assert not node.is_leaf
+                cedge.receiver_clade = compress_clade(node)
+
             cedge_hash = (cedge.donor_clade, cedge.receiver_clade)
             if None not in cedge_hash:
                 # Check whether this is contact edge was already added
@@ -176,7 +176,6 @@ def collect_contactedges(tree: Node, block_posterior_threshold: float = 0.5) -> 
                     contactedges.pop(node.name)
                 else:
                     done.add(cedge_hash)
-
 
     return list(contactedges.values())
 

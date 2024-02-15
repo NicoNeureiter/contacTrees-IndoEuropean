@@ -84,7 +84,7 @@ def read_contactedges(nexus: NexusReader, burnin=0.1, return_n_samples=False,
 
     n_burnin_samples = int(burnin * tree_handler.ntrees)
 
-    trees: List[Node] = [t.newick_tree for t in tree_handler.trees[n_burnin_samples::10]]
+    trees: List[Node] = [t.newick_tree for t in tree_handler.trees[n_burnin_samples::4]]
     n_samples = len(trees)
 
     contactedges = []
@@ -313,7 +313,7 @@ def plot_word_labels(
         if row.language == 'Latin_M':
             row = row.copy()
             row.language = 'Latin_preserved'
-            df = df.append(row, ignore_index=True)
+            df = df._append(row, ignore_index=True)
 
     if words is None:
         words = np.unique(df.concept.to_numpy())
@@ -726,11 +726,6 @@ def main(
     out_path: Path | str,
     show: bool = False
 ):
-    # trees_path = Path('results/fix_clock_stdev/CT_fixTopo/covarion/CT_fixTopo_covarion.trees')
-    # summary_tree_path = Path('results/fix_clock_stdev/CT_fixTopo/covarion/CT_fixTopo_covarion.summary.tree')
-    # data_path = Path('resources/data-mittellatein-2021-09-30.csv')
-    # out_path = Path('./loanwords_per_contact_edge_fixedStdev_pMin=0.25/')
-
     samples_nexus = NexusReader.from_file(trees_path)
     summary_nexus = NexusReader.from_file(summary_tree_path)
 
@@ -740,15 +735,9 @@ def main(
         data_path=data_path,
         edge_trees_directory=out_path,
         block_posterior_threshold=0.25,
-        burnin=0.0,
+        burnin=0.1,
         show=show
     )
-
-    # fig, ax = plt.subplots(figsize=(60, 90))
-    # plot_word_labels(summary_nexus, header_interval=6, no_tree=True, ax=ax)
-    # plt.axis('off')
-    # plt.tight_layout(pad=0.01)
-    # plt.savefig('wordlist.pdf')
 
 
 def cli():

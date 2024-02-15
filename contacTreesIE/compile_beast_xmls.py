@@ -8,7 +8,8 @@ from copy import deepcopy
 from enum import Enum
 
 import pandas as pd
-from newick import Node, parse_node
+import newick
+from newick import Node
 
 from contacTreesIE.newick_util import get_sibling, translate_node_names, get_age, get_node_by_name
 from contacTreesIE.preprocessing.language_lists import *
@@ -604,8 +605,7 @@ def fix_tree(old_newick: str,
              add_zombie_latin: bool,
              add_medieval_latin: bool) -> str:
     old_newick_no_attr = drop_attributes(old_newick)
-
-    tree = parse_node(old_newick_no_attr.strip(' ;'))
+    tree = newick.NewickString(old_newick_no_attr.strip(";")).to_node()
     translate_node_names(tree, translate)
     translate_node_names(tree, RENAME_CHANG)
 
@@ -616,7 +616,7 @@ def fix_tree(old_newick: str,
     tree.prune_by_names(INCLUDED_LANGUAGES, inverse=True)
     tree.remove_redundant_nodes()
     tree.length = 0.0
-    tree = parse_node(tree.newick)
+    tree = newick.NewickString(tree.newick).to_node()
 
     for node in tree.get_leaves():
         err = get_age(node) - TIP_DATES[node.name]
@@ -730,7 +730,7 @@ if __name__ == '__main__':
         },
 
         'CT_fixTopo/covarion': {
-            'sampler': Samplers.MC3,
+            'sampler': Samplers.MCMC,
             'chain_length': 20000000,
             'use_contactrees': True,
             'fixed_topolgy': True,
