@@ -16,7 +16,7 @@ class Samplers(Enum):
 
 SAMPLER_TAG = {
     Samplers.MCMC: '<run id="mcmc" spec="MCMC" chainLength="{chain_length}">',
-    Samplers.MC3: '<run id="mcmc" spec="CoupledMCMC" chainLength="{chain_length}" chains="4" deltaTemperature="0.04" target="0.15" optimise="true" resampleEvery="2000" heatLikelihoodOnly="true" logHeatedChains="true" neighbourSwapping="true">',
+    Samplers.MC3: '<run id="mcmc" spec="beast.coupledMCMC.CoupledMCMC" chainLength="{chain_length}" chains="4" deltaTemperature="0.04" target="0.15" optimise="true" resampleEvery="2000" heatLikelihoodOnly="true" logHeatedChains="true" neighbourSwapping="true">',
     Samplers.NS: '<run id="mcmc" spec="beast.gss.MultiThreadedNS" chainLength="{chain_length}" threads="2" particleCount="1" subChainLength="50000">',
     # Samplers.NS: '<run id="mcmc" spec="beast.gss.NS" chainLength="{chain_length}" particleCount="1" subChainLength="20000">',
 }

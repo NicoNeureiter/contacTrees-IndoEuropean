@@ -200,7 +200,7 @@ BOUCKAERT_PRUNED_TREE = '''(((53[&rate_range={8.916265495408297E-7,2.00111898092
 
 if __name__ == '__main__':
     from contacTreesIE.newick_util import get_age
-    from newick import parse_node
-    t = parse_node(CHANG_MEDIUM_TREE[:-1])
+    import newick
+    t = newick.NewickString(CHANG_MEDIUM_TREE[:-1]).to_node()
     for node in t.get_leaves():
         print(node, get_age(node))

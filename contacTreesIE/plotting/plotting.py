@@ -109,15 +109,16 @@ def assign_node_coordinates(
 
         return left
 
+
 def plot_tree_topology(
-        node: Node,
-        node_plotter: Callable = None,
-        annotate_leafs: bool = False,
-        annotate_internal_nodes: bool = False,
-        leaf_label_args: dict = None,
-        ax: plt.Axes = None,
-        clade_color_getter: Optional[Callable] = None,
-        **plot_kwargs
+    node: Node,
+    node_plotter: Callable = None,
+    annotate_leafs: bool = False,
+    annotate_internal_nodes: bool = False,
+    leaf_label_args: dict = None,
+    ax: plt.Axes = None,
+    clade_color_getter: Optional[Callable] = None,
+    **plot_kwargs
 ):
     """
 
